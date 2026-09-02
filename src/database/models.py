@@ -28,3 +28,7 @@ class Contaсt(Base):
     phone = Column(String(50), nullable= False)
 
     birthday = Column(Date, nullable = False )
+
+    additional_information = Column(String(500))
+
+    

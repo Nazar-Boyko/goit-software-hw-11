@@ -19,4 +19,4 @@ class ContactResponse(ContactBase):
     id : int
 
     class Config:
-        from_atttibutes = True
+        from_attributes = True
