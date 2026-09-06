@@ -6,16 +6,30 @@ from sqlalchemy.orm import Session
 from src.database.db import get_db
 from src.schemas import ContactBase, ContactResponse
 from src.repository import contacts as contacts_repository
+from src.services.auth import auth_service
+from src.database.models import User
 
-router = APIRouter(prefix='/contacts', tags = ["contacts"])
+
+router = APIRouter(
+    prefix="/contacts",
+    tags=["contacts"]
+)
+
 
 @router.get("/", response_model=List[ContactResponse])
 async def read_contacts(
-    skip:int = 0, 
-    limit:int = 100, 
-    db:Session = Depends(get_db)):
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(auth_service.get_current_user),
+    db: Session = Depends(get_db)
+):
+    contacts = await contacts_repository.get_contacts(
+        skip,
+        limit,
+        current_user,
+        db
+    )
 
-    contacts = await contacts_repository.get_contacts(skip, limit, db)
     return contacts
 
 
@@ -24,31 +38,47 @@ async def search_contacts(
     first_name: str | None = None,
     last_name: str | None = None,
     email: str | None = None,
+    current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
-    ):
-
+):
     return await contacts_repository.search_contacts(
         first_name,
         last_name,
         email,
+        current_user,
         db
     )
 
-@router.get("/upcoming_birthday", response_model=List[ContactResponse])
-async def get_aucomaing_birthday(
+
+@router.get(
+    "/upcoming_birthday",
+    response_model=List[ContactResponse]
+)
+async def get_upcoming_birthday(
     skip: int = 0,
     limit: int = 100,
-    db : Session = Depends(get_db)
-    ):
+    current_user: User = Depends(auth_service.get_current_user),
+    db: Session = Depends(get_db)
+):
+    return await contacts_repository.get_upcoming_birthdays(
+        skip,
+        limit,
+        current_user,
+        db
+    )
 
-    return await contacts_repository.get_upcoming_birthdays(skip, limit, db)
 
-@router.get('/{contact_id}', response_model=ContactResponse)
+@router.get("/{contact_id}", response_model=ContactResponse)
 async def read_contact(
-    contact_id: int, 
-    db: Session = Depends(get_db)):
-
-    contact = await contacts_repository.get_contact(contact_id, db)
+    contact_id: int,
+    current_user: User = Depends(auth_service.get_current_user),
+    db: Session = Depends(get_db)
+):
+    contact = await contacts_repository.get_contact(
+        contact_id,
+        current_user,
+        db
+    )
 
     if contact is None:
         raise HTTPException(
@@ -59,41 +89,59 @@ async def read_contact(
     return contact
 
 
-
-
-@router.post("/", response_model=ContactResponse)
+@router.post("/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
 async def create_contact(
-    body: ContactBase, 
-    db: Session = Depends(get_db)):
+    body: ContactBase,
+    current_user: User = Depends(auth_service.get_current_user),
+    db: Session = Depends(get_db)
+):
+    return await contacts_repository.create_contact(
+        body,
+        current_user,
+        db
+    )
 
-    return await contacts_repository.create_contact(body,db)
 
 @router.put("/{contact_id}", response_model=ContactResponse)
 async def update_contact(
     contact_id: int,
     body: ContactBase,
+    current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
-    ):
-
-    contact = await contacts_repository.update_contact(contact_id, body, db)
+):
+    contact = await contacts_repository.update_contact(
+        contact_id,
+        body,
+        current_user,
+        db
+    )
 
     if contact is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Contact not found')
+            detail="Contact not found"
+        )
 
     return contact
+
 
 @router.delete("/{contact_id}", response_model=ContactResponse)
 async def remove_contact(
     contact_id: int,
-    db: Session = Depends(get_db)):
-
-    contact = await contacts_repository.remove_contact(contact_id, db)
+    current_user: User = Depends(auth_service.get_current_user),
+    db: Session = Depends(get_db)
+):
+    contact = await contacts_repository.remove_contact(
+        contact_id,
+        current_user,
+        db
+    )
 
     if contact is None:
         raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Contact not found')
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contact not found"
+        )
 
     return contact
+

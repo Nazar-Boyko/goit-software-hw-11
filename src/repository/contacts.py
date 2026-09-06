@@ -2,25 +2,27 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
-from src.database.models import Contaсt
+from src.database.models import Contaсt, User
 from src.schemas import ContactBase
 
 from datetime import date, timedelta
 
-async def get_contacts(skip: int, limit: int, db: Session) -> List[Contaсt]:
-    return db.query(Contaсt).offset(skip).limit(limit).all()
+async def get_contacts(skip: int, limit: int, user: User, db: Session) -> List[Contaсt]:
+    return db.query(Contaсt).filter(Contaсt.user_id == user.id).offset(skip).limit(limit).all()
 
-async def get_contact(contact_id: int, db: Session) -> Contaсt:
-    return db.query(Contaсt).filter(Contaсt.id == contact_id).first()
+async def get_contact(contact_id: int, user: User, db: Session) -> Contaсt:
+    return db.query(Contaсt).filter(Contaсt.id == contact_id, Contaсt.user_id == user.id).first()
+
 
 async def search_contacts(
     first_name: str | None,
     last_name: str | None,
     email: str | None,
+    user: User,
     db: Session
     ) -> List[Contaсt]:
 
-    query = db.query(Contaсt)
+    query = db.query(Contaсt).filter(Contaсt.user_id == user.id)
 
     if first_name:
         query = query.filter(
@@ -39,7 +41,7 @@ async def search_contacts(
 
     return query.all()
 
-async def get_upcoming_birthdays(skip: int, limit: int, db : Session):
+async def get_upcoming_birthdays(skip: int, limit: int, user: User, db : Session):
 
     days = 7
 
@@ -47,7 +49,7 @@ async def get_upcoming_birthdays(skip: int, limit: int, db : Session):
     today = date.today()
     end_date = today + timedelta(days=days)
 
-    contacts = await get_contacts(skip, limit, db)
+    contacts = await get_contacts(skip, limit, user, db)
 
     for contact in contacts:
 
@@ -63,9 +65,9 @@ async def get_upcoming_birthdays(skip: int, limit: int, db : Session):
     return upcoming_birthdays
 
 
-async def create_contact(body: ContactBase, db: Session) -> Contaсt:
+async def create_contact(body: ContactBase, user: User, db: Session) -> Contaсt:
 
-    contact = Contaсt(**body.model_dump())
+    contact = Contaсt(**body.model_dump(), user_id = user.id)
 
     db.add(contact)
     db.commit()
@@ -73,9 +75,9 @@ async def create_contact(body: ContactBase, db: Session) -> Contaсt:
 
     return contact
 
-async def update_contact(contact_id: int, body: ContactBase, db: Session) -> Contaсt | None:
+async def update_contact(contact_id: int, body: ContactBase, user: User, db: Session) -> Contaсt | None:
 
-    contact = db.query(Contaсt).filter(Contaсt.id == contact_id).first()
+    contact = db.query(Contaсt).filter(Contaсt.id == contact_id, Contaсt.user_id == user.id).first()
 
     if contact:
         for field, value in body.model_dump().items():
@@ -88,9 +90,9 @@ async def update_contact(contact_id: int, body: ContactBase, db: Session) -> Con
 
     return None
 
-async def remove_contact(contact_id: int, db: Session) -> Contaсt | None:
+async def remove_contact(contact_id: int, user: User, db: Session) -> Contaсt | None:
 
-    contact = db.query(Contaсt).filter(Contaсt.id == contact_id).first()
+    contact = db.query(Contaсt).filter(Contaсt.id == contact_id, Contaсt.user_id == user.id).first()
     if contact:
         db.delete(contact)
         db.commit()
