@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, func
+from sqlalchemy import Column, Integer, String, func, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.schema import ForeignKey
 from sqlalchemy.sql.sqltypes import Date, DateTime
@@ -29,7 +29,7 @@ class Contaсt(Base):
 
     birthday = Column(Date, nullable = False )
 
-    additional_information = Column(String(500))
+    additional_information = Column(String(500), default=None)
 
     user_id = Column('user_id', ForeignKey('users.id', ondelete='CASCADE'), default=None)
     user = relationship("User", backref='contacts')

@@ -16,7 +16,7 @@ class Auth:
 
     SECRET_KEY = 'secret_key'
     ALGORITHM = 'HS256'
-    oauth2_sheme = OAuth2PasswordBearer(tokenUrl='/api/auth/login')
+    oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/login')
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str):
@@ -53,10 +53,10 @@ class Auth:
         encode_access_token = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
         return encode_access_token
 
-    async def create_refrash_token(self, data: dict, expireles_delta: Optional[float] = None):
+    async def create_refresh_token(self, data: dict, expires_delta: Optional[float] = None):
         to_encode = data.copy()
-        if expireles_delta:
-            expire = datetime.utcnow() + timedelta(seconds=expireles_delta)
+        if expires_delta:
+            expire = datetime.utcnow() + timedelta(seconds=expires_delta)
         else:
             expire = datetime.utcnow() + timedelta(days = 7)
 
@@ -90,7 +90,7 @@ class Auth:
 
     async def get_current_user(
             self, 
-            token: str = Depends(oauth2_sheme), 
+            token: str = Depends(oauth2_scheme), 
             db: Session = Depends(get_db)
             ):
 
@@ -102,14 +102,14 @@ class Auth:
 
         try:
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
-            if payload['scope'] == 'aceess_token':
+            if payload['scope'] == 'access_token':
                 email = payload['sub']
                 if email is None:
                     raise credentials_exeption
             else:
                 raise credentials_exeption
         except JWTError as e:
-            credentials_exeption
+            raise credentials_exeption
 
         user = await repository_users.get_user_by_email(email,db)
 

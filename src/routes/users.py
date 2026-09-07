@@ -1,11 +1,11 @@
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Depends, status, Security
-from fastapi.security import OAuth2PasswordRequestForm, HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from src.database.db import get_db
-from src.schemas import UserModel, UserResponse, TokenModel
+from src.schemas import UserModel, UserResponse, TokenModel, UserLogin
 from src.repository import users as user_repository
 from src.services.auth import auth_service
 
@@ -31,8 +31,10 @@ async def signup(body: UserModel, db: Session = Depends(get_db)):
     }
 
 @router.post('/login', response_model=TokenModel)
-async def login(body: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = await user_repository.get_user_by_email(body.username, db)
+async def login(
+    body: UserLogin, 
+    db: Session = Depends(get_db)):
+    user = await user_repository.get_user_by_email(body.email, db)
     if user is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
@@ -45,7 +47,7 @@ async def login(body: OAuth2PasswordRequestForm = Depends(), db: Session = Depen
         )
 
     access_token = await auth_service.create_access_token(data={'sub' : user.email})
-    refresh_token = await auth_service.create_refrash_token(data={'sub' : user.email})
+    refresh_token = await auth_service.create_refresh_token(data={'sub' : user.email})
 
     await user_repository.update_token(user, refresh_token, db)
 
@@ -64,12 +66,20 @@ async def refresh_token(
     email = await auth_service.decode_refresh_token(token)
     user = await user_repository.get_user_by_email(email, db)
 
+    if user is None:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid refresh token'
+    )
     if user.refresh_token != token:
         await user_repository.update_token(user, None, db)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid refresh token')
+        raise HTTPException(
+             status_code=status.HTTP_401_UNAUTHORIZED, 
+             detail='Invalid refresh token'
+        )
 
     access_token = await auth_service.create_access_token(data = {'sub' : email})
-    refresh_token = await auth_service.create_refrash_token(data={'sub' : email})
+    refresh_token = await auth_service.create_refresh_token(data={'sub' : email})
 
     await user_repository.update_token(user, refresh_token, db)
     return {
