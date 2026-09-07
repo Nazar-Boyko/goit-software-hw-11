@@ -26,6 +26,9 @@ class UserModel(BaseModel):
     email: str
     password: str = Field(min_length=6, max_length=10)
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
 class UserDb(BaseModel):
 
@@ -33,6 +36,7 @@ class UserDb(BaseModel):
     username: str
     email: str
     created_at: datetime
+    confirmed: bool
 
     class Config:
         orm_mode = True
