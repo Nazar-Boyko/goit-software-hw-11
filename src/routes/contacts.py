@@ -1,6 +1,8 @@
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi_limiter.depends import RateLimiter
+from pyrate_limiter import Rate, Duration, Limiter
 from sqlalchemy.orm import Session
 
 from src.database.db import get_db
@@ -16,7 +18,15 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[ContactResponse])
+@router.get(
+    "/",
+    response_model=List[ContactResponse],
+    description="No more than 10 request per minute", 
+    dependencies=[
+        Depends(
+            RateLimiter(
+                limiter=Limiter(
+                    Rate(10, Duration.MINUTE))))])
 async def read_contacts(
     skip: int = 0,
     limit: int = 100,
@@ -89,7 +99,21 @@ async def read_contact(
     return contact
 
 
-@router.post("/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ContactResponse, 
+    status_code=status.HTTP_201_CREATED,
+    description="No more than 10 contacts per minute",
+    dependencies=[
+        Depends(
+            RateLimiter(
+                limiter=Limiter(
+                    Rate(10, Duration.MINUTE)
+                )
+            )
+        )
+    ]
+)
 async def create_contact(
     body: ContactBase,
     current_user: User = Depends(auth_service.get_current_user),
@@ -144,4 +168,3 @@ async def remove_contact(
         )
 
     return contact
-

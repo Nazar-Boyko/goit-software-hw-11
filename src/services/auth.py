@@ -5,18 +5,25 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-import bcrypt
+from dotenv import load_dotenv
+from os import getenv
 
+import pickle
+import redis
+import bcrypt
 
 from src.database.db import get_db
 from src.repository import users as repository_users
+from src.conf.config import settings
 
+load_dotenv()
 
 class Auth:
 
-    SECRET_KEY = 'secret_key'
-    ALGORITHM = 'HS256'
+    SECRET_KEY = settings.secret_key
+    ALGORITHM = settings.algorithm
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/login')
+    r = redis.Redis(host=settings.redis_host, port=settings.redis_port, db=0)
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str):
@@ -33,6 +40,7 @@ class Auth:
         password_bytes = password.encode('utf-8')
         salt = bcrypt.gensalt()
         return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
+
 
 
     async def create_access_token(self, data: dict, expires_delta: Optional[float] = None):
@@ -111,11 +119,82 @@ class Auth:
         except JWTError as e:
             raise credentials_exeption
 
-        user = await repository_users.get_user_by_email(email,db)
+        user = self.r.get(f"user:{email}")
 
         if user is None:
-            raise credentials_exeption
+            user = await repository_users.get_user_by_email(email,db)
+            if user is None:
+                raise credentials_exeption
+            self.r.set(f"user:{email}", pickle.dumps(user))
+            self.r.expire(f"user:{email}", 900)
+        else:
+            user = pickle.loads(user)
         return user
 
+    async def create_email_token(self, data: dict):
+
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(days=7)
+        to_encode.update(
+            {
+                'iat' : datetime.utcnow(),
+                'exp' : expire
+            }
+        )
+
+        token = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        return token
+
+    async def get_email_from_token(self, token: str):
+
+        try:
+            payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+            email = payload['sub']
+            return email
+        except JWTError as e:
+            print(e)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Invalid token for email"
+            )
+
+    async def create_reset_password_token(self, data: dict):
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(minutes=15)
+        to_encode.update(
+            {
+                'iat' : datetime.utcnow(),
+                'exp' : expire,
+                'type' : 'reset_password'
+            }
+        )
+
+        token = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        return token
+
+    async def decode_reset_password_token(self, token: str):
+        try:
+            payload = jwt.decode(
+                token,
+                settings.secret_key,
+                algorithms=[settings.algorithm]
+            )
+
+            email = payload.get('sub')
+            token_type = payload.get('type')
+
+            if email is None or token_type != 'reset_password':
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid reset password token"
+                )
+            return email
+
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid reset password token"
+            )
+        
 auth_service = Auth()
 

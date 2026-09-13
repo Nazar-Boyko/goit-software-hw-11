@@ -37,20 +37,25 @@ class UserDb(BaseModel):
     email: str
     created_at: datetime
     confirmed: bool
+    avatar: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserResponse(BaseModel):
-
     user: UserDb
     detail: str = "User successfully created"
 
-class TokenModel(BaseModel):
+class RequestEmail(BaseModel):
+    email: EmailStr
 
+class TokenModel(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = 'bearer'
+
+class ResetPassword(BaseModel):
+    password: str
 
     

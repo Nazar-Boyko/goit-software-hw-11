@@ -1,92 +1,58 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException, Depends, status, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, HTTPException, Depends, status, Security, BackgroundTasks, Request, File, UploadFile
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+import cloudinary 
+import cloudinary.uploader 
+
+import pathlib
 
 from src.database.db import get_db
-from src.schemas import UserModel, UserResponse, TokenModel, UserLogin
+from src.schemas import UserModel, UserResponse, TokenModel, UserLogin, RequestEmail, UserDb
 from src.repository import users as user_repository
 from src.services.auth import auth_service
+from src.services.email import send_email
+from src.database.models import User
+from src.conf.config import settings 
 
-router = APIRouter(prefix='/auth', tags=['auth'])
+router = APIRouter(prefix='/users', tags=['users'])
 security = HTTPBearer()
 
-@router.post('/signup', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def signup(body: UserModel, db: Session = Depends(get_db)):
 
-    exist_user = await user_repository.get_user_by_email(body.email,db)
-    if exist_user:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, 
-            detail="Account already exists"
-        )
+@router.get('/me/', response_model=UserDb)
+async def read_users_me(current_user: User = Depends(auth_service.get_current_user)):
+    return current_user
 
-    body.password = auth_service.get_password_hash(body.password)
-    new_user = await user_repository.create_user(body, db)
-
-    return {
-        'user' : new_user,
-        'detail' : "User successfully created"
-    }
-
-@router.post('/login', response_model=TokenModel)
-async def login(
-    body: UserLogin, 
-    db: Session = Depends(get_db)):
-    user = await user_repository.get_user_by_email(body.email, db)
-    if user is None:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid email'
-        )
-    if not auth_service.verify_password(body.password, user.password):
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid password'
-        )
-
-    access_token = await auth_service.create_access_token(data={'sub' : user.email})
-    refresh_token = await auth_service.create_refresh_token(data={'sub' : user.email})
-
-    await user_repository.update_token(user, refresh_token, db)
-
-    return {
-        'access_token' : access_token,
-        'refresh_token' : refresh_token,
-        'token_type' : 'bearer'
-    }
-
-@router.get("/refresh_token", response_model=TokenModel)
-async def refresh_token(
-    credentials: HTTPAuthorizationCredentials = Security(security),
+@router.patch("/avatar", response_model=UserDb)
+async def update_avatar_user(
+    file: UploadFile = File(),
+    current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)):
 
-    token = credentials.credentials
-    email = await auth_service.decode_refresh_token(token)
-    user = await user_repository.get_user_by_email(email, db)
-
-    if user is None:
-            raise HTTPException(
-                status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid refresh token'
+    cloudinary.config(
+        cloud_name = settings.cloudinary_name,
+        api_key = settings.cloudinary_api_key,
+        api_secret = settings.cloudinary_api_secret,
+        secure=True
     )
-    if user.refresh_token != token:
-        await user_repository.update_token(user, None, db)
-        raise HTTPException(
-             status_code=status.HTTP_401_UNAUTHORIZED, 
-             detail='Invalid refresh token'
-        )
 
-    access_token = await auth_service.create_access_token(data = {'sub' : email})
-    refresh_token = await auth_service.create_refresh_token(data={'sub' : email})
+    r = cloudinary.uploader.upload(
+        file.file,
+        public_id = f"ContactsApp/{current_user.username}",
+        overwrite = True
+    )
 
-    await user_repository.update_token(user, refresh_token, db)
-    return {
-        'access_token' : access_token,
-        'refresh_token' : refresh_token,
-        'token_type' : 'bearer'
-    }
+    src_url = cloudinary.CloudinaryImage(
+        f"ContactsApp/{current_user.username}"
+    ).build_url(
+        width=250, 
+        height=250,
+        crop="fill",
+        version=r.get('version')
+    )
 
+    user = await user_repository.update_avatar(current_user.email, src_url, db)
 
+    return user
 
