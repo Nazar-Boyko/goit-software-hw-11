@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+postgres-data/
 
 # Environment variables
 .env
