@@ -15,7 +15,7 @@ Base = declarative_base()
 # День народження
 
 
-class Contaсt(Base):
+class Contact(Base):
 
     __tablename__ = "contacts"
 

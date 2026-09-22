@@ -18,3 +18,5 @@ pyrate-limiter == 4.5.0
 pydantic-settings == 2.15.0
 libgravatar == 1.0.4
 cloudinary == 1.46.2
+pytest == 9.1.1
+pytest-mock == 3.15.1

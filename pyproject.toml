@@ -23,10 +23,18 @@ dependencies = [
     "pyrate-limiter (>=4.5.0,<5.0.0)",
     "pydantic-settings (>=2.15.0,<3.0.0)",
     "libgravatar (>=1.0.4,<2.0.0)",
-    "cloudinary (>=1.46.2,<2.0.0)"
+    "cloudinary (>=1.46.2,<2.0.0)",
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-mock (>=3.15.1,<4.0.0)"
 ]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "sphinx (>=9.1.0,<10.0.0)",
+    "pytest-asyncio (>=1.4.0,<2.0.0)"
+]

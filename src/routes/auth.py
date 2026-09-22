@@ -1,3 +1,4 @@
+
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -43,6 +44,29 @@ async def signup(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """
+    Registers a new user in the system.
+
+    Checks whether a user with the specified email already exists,
+    hashes the password, creates a new user in the database, and
+    sends an email confirmation message in the background.
+
+    :param body: The data required to create a new user.
+    :type body: UserModel
+    :param background_tasks: FastAPI background tasks for sending
+        the confirmation email without blocking the response.
+    :type background_tasks: BackgroundTasks
+    :param request: The current HTTP request used to obtain the
+        application base URL.
+    :type request: Request
+    :param db: The database session.
+    :type db: Session
+    :return: Information about the successfully created user.
+    :rtype: UserResponse
+    :raises HTTPException: 409 if a user with the specified email
+        already exists.
+    """
+
     exist_user = await user_repository.get_user_by_email(
         body.email,
         db,
@@ -82,6 +106,27 @@ async def login(
     body: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    """
+    Authenticates a user and generates access and refresh tokens.
+
+    The user's email and password are checked against the data
+    stored in the database. The user must also have a confirmed
+    email address. After successful authentication, new access
+    and refresh tokens are generated and the refresh token is
+    saved in the database.
+
+    :param body: The OAuth2 form containing the user's email
+        and password.
+    :type body: OAuth2PasswordRequestForm
+    :param db: The database session.
+    :type db: Session
+    :return: Access token, refresh token and token type.
+    :rtype: TokenModel
+    :raises HTTPException: 401 if the email is invalid.
+    :raises HTTPException: 401 if the password is invalid.
+    :raises HTTPException: 401 if the user's email is not confirmed.
+    """
+
     user = await user_repository.get_user_by_email(
         body.username,
         db,
@@ -134,6 +179,25 @@ async def refresh_token(
     credentials: HTTPAuthorizationCredentials = Security(security),
     db: Session = Depends(get_db),
 ):
+    """
+    Refreshes the access and refresh tokens using a valid refresh token.
+
+    The refresh token is extracted from the Authorization header,
+    decoded and compared with the token stored for the current user.
+    If the token is valid, new access and refresh tokens are generated
+    and the old refresh token is replaced in the database.
+
+    :param credentials: Authorization credentials containing the
+        refresh token.
+    :type credentials: HTTPAuthorizationCredentials
+    :param db: The database session.
+    :type db: Session
+    :return: New access token, refresh token and token type.
+    :rtype: TokenModel
+    :raises HTTPException: 401 if the refresh token is invalid,
+        expired or does not match the stored token.
+    """
+
     token = credentials.credentials
 
     email = await auth_service.decode_refresh_token(token)
@@ -187,6 +251,24 @@ async def confirmed_email(
     token: str,
     db: Session = Depends(get_db),
 ):
+    """
+    Confirms a user's email address using a verification token.
+
+    The token is decoded to retrieve the user's email address.
+    The corresponding user is searched in the database. If the
+    user exists and has not been confirmed yet, the email is
+    marked as confirmed.
+
+    :param token: The email verification token.
+    :type token: str
+    :param db: The database session.
+    :type db: Session
+    :return: A message indicating the email confirmation status.
+    :rtype: dict
+    :raises HTTPException: 400 if the verification token is invalid
+        or the user cannot be found.
+    """
+
     email = await auth_service.get_email_from_token(token)
 
     user = await user_repository.get_user_by_email(
@@ -222,10 +304,36 @@ async def request_email(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """
+    Sends an email confirmation message to a registered user.
+
+    If the user exists and their email is already confirmed,
+    no new confirmation message is sent. Otherwise, the
+    confirmation email is added to FastAPI background tasks.
+
+    :param body: The request containing the user's email address.
+    :type body: RequestEmail
+    :param background_tasks: FastAPI background tasks used to send
+        the confirmation email asynchronously.
+    :type background_tasks: BackgroundTasks
+    :param request: The current HTTP request used to obtain the
+        application base URL.
+    :type request: Request
+    :param db: The database session.
+    :type db: Session
+    :return: A message indicating that the confirmation email
+        has been requested.
+    :rtype: dict
+    """
+
     user = await user_repository.get_user_by_email(
         body.email,
         db,
     )
+
+    if user is None:
+        return {
+            }
 
     if user and user.confirmed:
         return {
@@ -252,6 +360,29 @@ async def reset_password(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """
+    Requests a password reset for a registered user.
+
+    Searches for a user by email address. If the user exists,
+    a password reset email containing a reset token is sent
+    as a background task.
+
+    :param body: The request containing the user's email address.
+    :type body: RequestEmail
+    :param background_tasks: FastAPI background tasks used to send
+        the password reset email asynchronously.
+    :type background_tasks: BackgroundTasks
+    :param request: The current HTTP request used to obtain the
+        application base URL.
+    :type request: Request
+    :param db: The database session.
+    :type db: Session
+    :return: A message indicating that the password reset email
+        has been requested, or an error message if the user
+        does not exist.
+    :rtype: dict
+    """
+
     user = await user_repository.get_user_by_email(
         body.email,
         db,
@@ -265,8 +396,12 @@ async def reset_password(
             request.base_url,
         )
     else:
-        return {"message" : "A user with this email does not exist, please register."}
-
+        return {
+            "message": (
+                "A user with this email does not exist, "
+                "please register."
+            )
+        }
 
     return {
         "message": "Check your email to reset your password",
@@ -275,13 +410,28 @@ async def reset_password(
 
 @router.get("/reset_password/{token}")
 async def reset_password_form(token: str):
+    """
+    Validates a password reset token and returns data required
+    to create a new password.
+
+    The reset token is decoded to retrieve the email address
+    associated with the password reset request.
+
+    :param token: The password reset token received by the user.
+    :type token: str
+    :return: A message, user's email and the reset token.
+    :rtype: dict
+    :raises HTTPException: 400 if the token is invalid or expired.
+    """
+
     email = await auth_service.decode_reset_password_token(
         token
     )
+
     if not email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid or expired token'
+            detail="Invalid or expired token",
         )
 
     return {
@@ -297,6 +447,24 @@ async def reset_password_confirm(
     body: ResetPassword,
     db: Session = Depends(get_db),
 ):
+    """
+    Resets the user's password using a valid reset token.
+
+    The reset token is decoded to identify the user. The new
+    password is hashed and saved in the database.
+
+    :param token: The password reset token.
+    :type token: str
+    :param body: The request containing the new password.
+    :type body: ResetPassword
+    :param db: The database session.
+    :type db: Session
+    :return: A message confirming that the password was changed.
+    :rtype: dict
+    :raises HTTPException: 404 if the user associated with the
+        reset token does not exist.
+    """
+
     email = await auth_service.decode_reset_password_token(
         token
     )
@@ -323,3 +491,4 @@ async def reset_password_confirm(
     return {
         "message": "Password successfully reset",
     }
+

@@ -17,6 +17,11 @@ router = APIRouter(
     tags=["contacts"]
 )
 
+contacts_rate_limiter = RateLimiter(
+    limiter=Limiter(
+        Rate(10, Duration.MINUTE)
+    )
+)
 
 @router.get(
     "/",
@@ -24,22 +29,39 @@ router = APIRouter(
     description="No more than 10 request per minute", 
     dependencies=[
         Depends(
-            RateLimiter(
-                limiter=Limiter(
-                    Rate(10, Duration.MINUTE))))])
+            contacts_rate_limiter
+        )
+    ]
+)
 async def read_contacts(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    """
+    Retrieves a list of contacts for the current user with specified pagination parameters.
+    
+    :param skip: The number of contacts to skip.
+    :type skip: int
+    :param limit: The maximum number of contacts to return.
+    :type limit: int
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: A list of contacts.
+    :rtype: List[ContactResponse]
+
+    """
+
     contacts = await contacts_repository.get_contacts(
         skip,
         limit,
         current_user,
         db
     )
-
     return contacts
 
 
@@ -51,6 +73,22 @@ async def search_contacts(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Searches for contacts based on the provided criteria.
+
+    :param first_name: The first name to search for.
+    :type first_name: str | None
+    :param last_name: The last name to search for.
+    :type last_name: str | None
+    :param email: The email to search for.
+    :type email: str | None
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: A list of contacts matching the search criteria.
+    :rtype: List[ContactResponse]
+    """
     return await contacts_repository.search_contacts(
         first_name,
         last_name,
@@ -70,6 +108,22 @@ async def get_upcoming_birthday(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    """
+    Retrieves a list of contacts with upcoming birthdays for the current user.
+
+    :param skip: The number of contacts to skip.
+    :type skip: int
+    :param limit: The maximum number of contacts to return.
+    :type limit: int
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: A list of contacts with upcoming birthdays.
+    :rtype: List[ContactResponse]
+    """
+
     return await contacts_repository.get_upcoming_birthdays(
         skip,
         limit,
@@ -84,6 +138,19 @@ async def read_contact(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Retrieves a specific contact by ID.
+
+    :param contact_id: The ID of the contact to retrieve.
+    :type contact_id: int
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: The requested contact.
+    :rtype: ContactResponse
+    """
+
     contact = await contacts_repository.get_contact(
         contact_id,
         current_user,
@@ -106,11 +173,7 @@ async def read_contact(
     description="No more than 10 contacts per minute",
     dependencies=[
         Depends(
-            RateLimiter(
-                limiter=Limiter(
-                    Rate(10, Duration.MINUTE)
-                )
-            )
+            contacts_rate_limiter
         )
     ]
 )
@@ -119,6 +182,18 @@ async def create_contact(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Creates a new contact for the current user.
+
+    :param body: The details of the contact to create.
+    :type body: ContactBase
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: The created contact.
+    :rtype: ContactResponse
+    """
     return await contacts_repository.create_contact(
         body,
         current_user,
@@ -133,6 +208,21 @@ async def update_contact(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Updates an existing contact for the current user.
+    
+    :param contact_id: The ID of the contact to update.
+    :type contact_id: int
+    :param body: The updated details of the contact.
+    :type body: ContactBase
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: The updated contact.
+    :rtype: ContactResponse
+    
+    """
     contact = await contacts_repository.update_contact(
         contact_id,
         body,
@@ -155,6 +245,18 @@ async def remove_contact(
     current_user: User = Depends(auth_service.get_current_user),
     db: Session = Depends(get_db)
 ):
+    """
+    Removes a contact by ID.
+
+    :param contact_id: The ID of the contact to remove.
+    :type contact_id: int
+    :param current_user: The currently authenticated user.
+    :type current_user: User
+    :param db: The database session.
+    :type db: Session
+    :return: The removed contact.
+    :rtype: ContactResponse
+    """
     contact = await contacts_repository.remove_contact(
         contact_id,
         current_user,

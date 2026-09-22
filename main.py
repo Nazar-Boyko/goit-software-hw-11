@@ -4,20 +4,33 @@ from fastapi_limiter.depends import RateLimiter
 from fastapi.middleware.cors import CORSMiddleware
 import redis.asyncio as redis
 
-from src.routes import contacts,users, auth
+from src.routes import contacts, users, auth
 from src.conf.config import settings
 
 
 app = FastAPI()
 
-app.include_router(contacts.router, prefix='/api')
-app.include_router(users.router, prefix='/api')
-app.include_router(auth.router, prefix='/api')
+
+app.include_router(
+    contacts.router,
+    prefix="/api",
+)
+
+app.include_router(
+    users.router,
+    prefix="/api",
+)
+
+app.include_router(
+    auth.router,
+    prefix="/api",
+)
 
 
 origins = [
     "http://localhost:3000"
-    ]
+]
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,8 +40,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get(
-    "/", 
+    "/",
     dependencies=[
         Depends(
             RateLimiter(
@@ -40,4 +54,18 @@ app.add_middleware(
     ]
 )
 async def read_root():
-    return {'message' : "Hello World"} 
+    """
+    Returns a basic response from the root endpoint.
+
+    The endpoint is used to check whether the FastAPI application
+    is running and accessible. Access to the endpoint is limited
+    to a maximum of 5 requests within 10 seconds.
+
+    :return: A welcome message confirming that the application
+        is running.
+    :rtype: dict
+    """
+    
+    return {
+        "message": "Hello World"
+    }
